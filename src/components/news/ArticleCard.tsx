@@ -36,7 +36,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
         <div className="w-1/3 bg-neutral-900 flex items-center justify-center">
           <div className="text-gray-500">
             <Image
-              src="/placeholder-image.png"
+              src="/placeholder.svg?width=100&height=100"
               alt="Placeholder"
               width={100}
               height={100}

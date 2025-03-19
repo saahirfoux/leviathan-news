@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <!-- Background -->
+  <rect width="600" height="400" fill="#F5F5F5"/>
+  
+  <!-- Image icon -->
+  <path d="M300 180C311.046 180 320 171.046 320 160C320 148.954 311.046 140 300 140C288.954 140 280 148.954 280 160C280 171.046 288.954 180 300 180Z" fill="#CCCCCC"/>
+  <path d="M230 260H370C375.523 260 380 255.523 380 250V150C380 144.477 375.523 140 370 140H350M250 140H230C224.477 140 220 144.477 220 150V250C220 255.523 224.477 260 230 260L230 260Z" stroke="#CCCCCC" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M220 220L252 188C254.667 185.333 259.333 185.333 262 188L300 226M300 226L320 206C322.667 203.333 327.333 203.333 330 206L380 256M300 226L330 256" stroke="#CCCCCC" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Text -->
+  <text x="300" y="300" font-family="Arial, sans-serif" font-size="16" fill="#999999" text-anchor="middle">News</text>
+</svg>
