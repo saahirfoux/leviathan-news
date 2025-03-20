@@ -1,7 +1,7 @@
 "use client";
 
-import { NewsFeed } from "@/components/news/results";
-import SearchFilters from "@/components/news/filters";
+import SearchFilters from "@/components/news/FilterSection";
+import NewsFeed from "@/components/news/NewsFeedSection";
 import { useState, useEffect } from "react";
 import { Article } from "@/types/article";
 import axios from "axios";
