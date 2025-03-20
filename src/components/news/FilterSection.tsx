@@ -9,6 +9,7 @@ import SearchInput from "./SearchInput";
 import CategorySelector from "./CategorySelector";
 import SourceSelector from "./SourceSelector";
 import DatePicker from "./DatePicker";
+import AuthorInput from "./AuthorInput";
 import ActionButtons from "./ActionButtons";
 
 // Article service for API calls
@@ -55,6 +56,7 @@ export default function SearchFilters({
     searchParams?.get("source") || "guardian"
   );
   const [date, setDate] = useState(searchParams?.get("date") || "");
+  const [author, setAuthor] = useState(searchParams?.get("author") || "");
 
   // Effect to update local state when URL params change
   useEffect(() => {
@@ -65,6 +67,7 @@ export default function SearchFilters({
       setSelectedCategory(searchParams.get("category") || "all");
       setSelectedSource(searchParams.get("source") || "guardian");
       setDate(searchParams.get("date") || "");
+      setAuthor(searchParams.get("author") || "");
     }
   }, [searchParams]);
 
@@ -92,6 +95,11 @@ export default function SearchFilters({
       params.append("date", date);
     }
 
+    // Add author if provided
+    if (author.trim()) {
+      params.append("author", author.trim());
+    }
+
     return params;
   };
 
@@ -116,6 +124,7 @@ export default function SearchFilters({
     setSelectedCategory("all");
     setSelectedSource("guardian");
     setDate("");
+    setAuthor("");
     router.push("/");
 
     // Fetch articles with empty params and update parent component
@@ -142,6 +151,8 @@ export default function SearchFilters({
         />
 
         <SourceSelector value={selectedSource} onChange={setSelectedSource} />
+
+        <AuthorInput value={author} onChange={setAuthor} />
 
         <DatePicker value={date} onChange={setDate} />
 
