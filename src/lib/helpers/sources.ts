@@ -7,261 +7,371 @@ import {
 import { NYTApiResponse, NYTDoc } from "@/types/nytApi";
 import { ArticleResponse } from "@/types";
 
-// Helper function to fetch from Guardian API
-const fetchFromGuardian = async (
-  keyword: string,
-  categories: string[],
-  author: string,
-  date: string
-) => {
-  try {
-    // Get the API key from environment variables
-    const apiKey = process.env.NEWS_GUARDIAN_APIKEY;
+// Common interface for news fetching operations
+interface NewsFetcher {
+  fetch(params: NewsQueryParams): Promise<NewsApiResult>;
+}
 
-    if (!apiKey) {
-      console.error("Guardian API key is not configured");
-      return { success: false, data: [], source: "guardian" };
+// Common parameters for all news API requests
+interface NewsQueryParams {
+  keyword: string;
+  categories: string[];
+  author?: string;
+  date?: string;
+}
+
+// Common return type for all news API requests
+interface NewsApiResult {
+  success: boolean;
+  data: ArticleResponse[];
+  source: string;
+}
+
+// Base class for news fetchers with common utilities
+abstract class BaseNewsFetcher implements NewsFetcher {
+  protected source: string;
+  protected apiKey: string | undefined;
+
+  constructor(source: string, apiKeyEnvVar: string) {
+    this.source = source;
+    this.apiKey = process.env[apiKeyEnvVar];
+  }
+
+  // Abstract method to be implemented by each specific fetcher
+  abstract fetch(params: NewsQueryParams): Promise<NewsApiResult>;
+
+  // Common error handling method
+  protected handleError(error: unknown): NewsApiResult {
+    console.error(`Error fetching from ${this.source} API:`, error);
+    return { success: false, data: [], source: this.source };
+  }
+
+  // Check if the API key is configured
+  protected validateApiKey(): boolean {
+    if (!this.apiKey) {
+      console.error(`${this.source} API key is not configured`);
+      return false;
     }
+    return true;
+  }
+}
 
-    // Build the Guardian API query parameters
-    const guardianParams = new URLSearchParams();
-    guardianParams.append("api-key", apiKey);
-    guardianParams.append("show-fields", "byline,trailText,thumbnail");
+// Guardian API implementation
+class GuardianFetcher extends BaseNewsFetcher {
+  constructor() {
+    super("guardian", "NEWS_GUARDIAN_APIKEY");
+  }
 
-    // Add keyword/query if provided
-    if (keyword) {
-      guardianParams.append("q", keyword);
-    }
+  async fetch({
+    keyword,
+    categories,
+    author,
+    date,
+  }: NewsQueryParams): Promise<NewsApiResult> {
+    try {
+      if (!this.validateApiKey()) {
+        return { success: false, data: [], source: this.source };
+      }
 
-    // Add category/section filter if provided (use only first category for Guardian)
-    if (categories.length > 0) {
-      guardianParams.append("section", categories[0]);
-    }
+      // Build the Guardian API query parameters
+      const params = new URLSearchParams();
+      params.append("api-key", this.apiKey!);
+      params.append("show-fields", "byline,trailText,thumbnail");
 
-    // Add date filter if provided (format should be YYYY-MM-DD)
-    if (date) {
-      guardianParams.append("from-date", date);
-      guardianParams.append("to-date", date);
-    }
+      // Add keyword/query if provided
+      if (keyword) {
+        params.append("q", keyword);
+      }
 
-    // Helper function to format author names for the Guardian API
-    function formatAuthorNames(authorName: string) {
-      // Remove any special characters and spaces for the concatenated version
-      const fullName = authorName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-      // Replace spaces with hyphens for the hyphenated version
-      const hyphenated = authorName.replace(/\s+/g, "-").toLowerCase();
-      return { fullName, hyphenated };
-    }
+      // Add category/section filter if provided (use only first category for Guardian)
+      if (categories.length > 0) {
+        params.append("section", categories[0]);
+      }
 
-    // Add author filter if provided
-    if (author) {
-      const { fullName, hyphenated } = formatAuthorNames(author);
-      guardianParams.append("tag", `profile/${fullName}`);
-      guardianParams.append("tag", `profile/${hyphenated}`);
-    }
+      // Add date filter if provided (format should be YYYY-MM-DD)
+      if (date) {
+        params.append("from-date", date);
+        params.append("to-date", date);
+      }
 
-    // Make the API request to Guardian
-    const apiUrl = "https://content.guardianapis.com/search";
-    const response = await axios.get<GuardianApiResponse>(
-      `${apiUrl}?${guardianParams.toString()}`
-    );
+      // Add author filter if provided
+      if (author) {
+        const { fullName, hyphenated } = this.formatAuthorNames(author);
+        params.append("tag", `profile/${fullName}`);
+        params.append("tag", `profile/${hyphenated}`);
+      }
 
-    // Transform the Guardian API response to our common format
-    const articles: ArticleResponse[] = response.data.response.results.map(
-      (result: GuardianResult): ArticleResponse => {
-        return {
+      // Make the API request to Guardian
+      const apiUrl = "https://content.guardianapis.com/search";
+      const response = await axios.get<GuardianApiResponse>(
+        `${apiUrl}?${params.toString()}`
+      );
+
+      // Transform the Guardian API response to our common format
+      const articles = response.data.response.results.map(
+        (result: GuardianResult): ArticleResponse => ({
           id: result.id,
           title: result.webTitle,
           summary: result.fields?.trailText || "",
           date: result.webPublicationDate,
           category: result.sectionId,
           author: result.fields?.byline || "",
-          source: "guardian",
+          source: this.source,
           image: result.fields?.thumbnail || "",
           url: result.webUrl,
-        };
-      }
-    );
+        })
+      );
 
-    return { success: true, data: articles, source: "guardian" };
-  } catch (error) {
-    console.error("Error fetching from Guardian API:", error);
-    return { success: false, data: [], source: "guardian" };
+      return { success: true, data: articles, source: this.source };
+    } catch (error) {
+      return this.handleError(error);
+    }
   }
-};
 
-// Helper function to fetch from NYT API
-const fetchFromNYT = async (
-  keyword: string,
-  categories: string[],
-  author: string,
-  date: string
-) => {
-  try {
-    // Get the API key from environment variables
-    const apiKey = process.env.NEWS_NYT_APIKEY;
+  // Helper function to format author names for the Guardian API
+  private formatAuthorNames(authorName: string) {
+    // Remove any special characters and spaces for the concatenated version
+    const fullName = authorName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    // Replace spaces with hyphens for the hyphenated version
+    const hyphenated = authorName.replace(/\s+/g, "-").toLowerCase();
+    return { fullName, hyphenated };
+  }
+}
 
-    if (!apiKey) {
-      console.error("NYT API key is not configured");
-      return { success: false, data: [], source: "nytimes" };
-    }
+// NYT API implementation
+class NYTFetcher extends BaseNewsFetcher {
+  constructor() {
+    super("nytimes", "NEWS_NYT_APIKEY");
+  }
 
-    // Category mapper for NYT sections
-    const mapCategoryToNYTSection = (category: string): string => {
-      const categoryMap: Record<string, string> = {
-        politics: "U.S.",
-        "us-news": "Us",
-        business: "Business Day",
-        environment: "Climate",
-      };
+  async fetch({
+    keyword,
+    categories,
+    author,
+    date,
+  }: NewsQueryParams): Promise<NewsApiResult> {
+    try {
+      if (!this.validateApiKey()) {
+        return { success: false, data: [], source: this.source };
+      }
 
-      return categoryMap[category.toLowerCase()] || category;
-    };
+      // Build the NYT API query parameters
+      const params = new URLSearchParams();
+      params.append("api-key", this.apiKey!);
 
-    // Build the NYT API query parameters
-    const nytParams = new URLSearchParams();
-    nytParams.append("api-key", apiKey);
+      // Add keyword/query if provided
+      if (keyword) {
+        params.append("q", keyword);
+      }
 
-    // Add keyword/query if provided
-    if (keyword) {
-      nytParams.append("q", keyword);
-    }
+      // Build filter query (fq parameter)
+      const filterQueries: string[] = [];
 
-    // Build filter query (fq parameter)
-    const filterQueries: string[] = [];
+      // Add date filter if provided (format should be YYYY-MM-DD)
+      if (date) {
+        filterQueries.push(`pub_date:("${date}")`);
+      }
 
-    // Add date filter if provided (format should be YYYY-MM-DD)
-    if (date) {
-      filterQueries.push(`pub_date:("${date}")`);
-    }
+      // Add category/section filter if provided
+      if (categories.length > 0) {
+        const mappedCategories = categories.map(this.mapCategoryToNYTSection);
+        const categoryFilter = mappedCategories
+          .map((cat) => `"${cat}"`)
+          .join(" OR ");
+        filterQueries.push(`section_name:(${categoryFilter})`);
+      }
 
-    // Add category/section filter if provided
-    if (categories.length > 0) {
-      const mappedCategories = categories.map(mapCategoryToNYTSection);
-      const categoryFilter = mappedCategories
-        .map((cat) => `"${cat}"`)
-        .join(" OR ");
-      filterQueries.push(`section_name:(${categoryFilter})`);
-    }
+      // Add author/byline filter if provided
+      if (author) {
+        filterQueries.push(`byline:("${author}")`);
+      }
 
-    // Add author/byline filter if provided
-    if (author) {
-      filterQueries.push(`byline:("${author}")`);
-    }
+      // Combine all filter queries with AND
+      if (filterQueries.length > 0) {
+        params.append("fq", filterQueries.join(" AND "));
+      }
 
-    // Combine all filter queries with AND
-    if (filterQueries.length > 0) {
-      nytParams.append("fq", filterQueries.join(" AND "));
-    }
+      // Make the API request to NYT
+      const apiUrl = "https://api.nytimes.com/svc/search/v2/articlesearch.json";
+      const response = await axios.get<NYTApiResponse>(
+        `${apiUrl}?${params.toString()}`
+      );
 
-    // Make the API request to NYT
-    const apiUrl = "https://api.nytimes.com/svc/search/v2/articlesearch.json";
-    const response = await axios.get<NYTApiResponse>(
-      `${apiUrl}?${nytParams.toString()}`
-    );
+      // Transform the NYT API response to our common format
+      const articles = response.data.response.docs.map(
+        (doc: NYTDoc): ArticleResponse => {
+          // Extract image URL if available in multimedia
+          const imageUrl =
+            doc.multimedia.length > 0
+              ? `https://www.nytimes.com/${doc.multimedia[0].url}`
+              : "";
 
-    // Transform the NYT API response to our common format
-    const articles: ArticleResponse[] = response.data.response.docs.map(
-      (doc: NYTDoc): ArticleResponse => {
-        // Extract image URL if available in multimedia
-        const imageUrl =
-          doc.multimedia.length > 0
-            ? `https://www.nytimes.com/${doc.multimedia[0].url}`
+          // Extract author from byline
+          const authorName = doc.byline?.original
+            ? doc.byline.original.replace("By ", "")
             : "";
 
-        // Extract author from byline
-        const authorName = doc.byline?.original
-          ? doc.byline.original.replace("By ", "")
-          : "";
+          return {
+            id: doc._id,
+            title: doc.headline.main,
+            summary: doc.abstract || doc.snippet,
+            date: doc.pub_date,
+            category: doc.section_name.toLowerCase(),
+            author: authorName,
+            source: this.source,
+            image: imageUrl,
+            url: doc.web_url,
+          };
+        }
+      );
 
-        return {
-          id: doc._id,
-          title: doc.headline.main,
-          summary: doc.abstract || doc.snippet,
-          date: doc.pub_date,
-          category: doc.section_name.toLowerCase(),
-          author: authorName,
-          source: "nytimes",
-          image: imageUrl,
-          url: doc.web_url,
-        };
-      }
-    );
-
-    return { success: true, data: articles, source: "nytimes" };
-  } catch (error) {
-    console.error("Error fetching from NYT API:", error);
-    return { success: false, data: [], source: "nytimes" };
+      return { success: true, data: articles, source: this.source };
+    } catch (error) {
+      return this.handleError(error);
+    }
   }
-};
 
-// Helper function to fetch from NewsAPI.org
-const fetchFromNewsAPI = async (
-  keyword: string,
-  categories: string[],
-  date: string
-) => {
-  try {
-    // Get the API key from environment variables
-    const apiKey = process.env.NEWS_API_ORG_KEY;
+  // Category mapper for NYT sections
+  private mapCategoryToNYTSection(category: string): string {
+    const categoryMap: Record<string, string> = {
+      politics: "U.S.",
+      "us-news": "Us",
+      business: "Business Day",
+      environment: "Climate",
+    };
 
-    if (!apiKey) {
-      return { success: false, data: [], source: "newsapi" };
-    }
+    return categoryMap[category.toLowerCase()] || category;
+  }
+}
 
-    // Build the NewsAPI.org query parameters
-    const newsApiParams = new URLSearchParams();
-    newsApiParams.append("apiKey", apiKey);
+// NewsAPI implementation
+class NewsApiFetcher extends BaseNewsFetcher {
+  constructor() {
+    super("newsapi", "NEWS_API_ORG_KEY");
+  }
 
-    // Set the domains - we can customize this later if needed
-    const domains = "bbc.co.uk,cnn.com,wired.com";
-    newsApiParams.append("domains", domains);
+  async fetch({ keyword, date }: NewsQueryParams): Promise<NewsApiResult> {
+    try {
+      if (!this.validateApiKey()) {
+        return { success: false, data: [], source: this.source };
+      }
 
-    // Add keyword/query if provided
-    if (keyword) {
-      newsApiParams.append("q", keyword);
-    }
+      // Build the NewsAPI.org query parameters
+      const params = new URLSearchParams();
+      params.append("apiKey", this.apiKey!);
 
-    // Add date filter if provided (format should be YYYY-MM-DD)
-    if (date) {
-      newsApiParams.append("from", date);
-      newsApiParams.append("to", date);
-    }
+      // Set the domains - we can customize this later if needed
+      const domains = "bbc.co.uk,cnn.com,wired.com";
+      params.append("domains", domains);
 
-    // Sort by most recent articles
-    newsApiParams.append("sortBy", "publishedAt");
+      // Add keyword/query if provided
+      if (keyword) {
+        params.append("q", keyword);
+      }
 
-    // In a future iteration, we can add a pageSize parameter to the query
-    newsApiParams.append("pageSize", "10");
+      // Add date filter if provided (format should be YYYY-MM-DD)
+      if (date) {
+        params.append("from", date);
+        params.append("to", date);
+      }
 
-    // Make the API request to NewsAPI.org
-    const apiUrl = "https://newsapi.org/v2/everything";
-    const response = await axios.get<NewsApiResponse>(
-      `${apiUrl}?${newsApiParams.toString()}`
-    );
+      // Sort by most recent articles
+      params.append("sortBy", "publishedAt");
+      params.append("pageSize", "10");
 
-    // Transform the NewsAPI.org response to our common format
-    const articles: ArticleResponse[] = response.data.articles.map(
-      (article: ExternalNewsApiArticle, index: number): ArticleResponse => {
-        return {
+      // Make the API request to NewsAPI.org
+      const apiUrl = "https://newsapi.org/v2/everything";
+      const response = await axios.get<NewsApiResponse>(
+        `${apiUrl}?${params.toString()}`
+      );
+
+      // Transform the NewsAPI.org response to our common format
+      const articles = response.data.articles.map(
+        (article: ExternalNewsApiArticle, index: number): ArticleResponse => ({
           id: `newsapi-${index}`,
           title: article.title,
           summary: article.description || "",
           date: article.publishedAt,
-          category: "", // NewsAPI doesn't provide categories
+          category: this.extractCategoryFromUrl(article.url) || "general",
           author: article.author || "",
-          source: article.source.name,
+          source: this.extractSourceFromUrl(article.url) || this.source,
           image: article.urlToImage || "",
           url: article.url,
-        };
-      }
-    );
+        })
+      );
 
-    return { success: true, data: articles, source: "newsapi" };
-  } catch (error) {
-    console.error("Error fetching from NewsAPI.org:", error);
-    return { success: false, data: [], source: "newsapi" };
+      return { success: true, data: articles, source: this.source };
+    } catch (error) {
+      return this.handleError(error);
+    }
   }
-};
 
-export { fetchFromGuardian, fetchFromNYT, fetchFromNewsAPI };
+  // Helper to extract domain/source from a URL
+  private extractSourceFromUrl(url: string): string {
+    try {
+      const hostname = new URL(url).hostname;
+      // Extract domain without www. and .com/.org etc.
+      return hostname.replace(/^www\./i, "").split(".")[0];
+    } catch {
+      return "";
+    }
+  }
+
+  // Helper to extract category from URL (basic implementation)
+  private extractCategoryFromUrl(url: string): string {
+    try {
+      const pathname = new URL(url).pathname;
+      const parts = pathname.split("/").filter(Boolean);
+      return parts.length > 0 ? parts[0] : "";
+    } catch {
+      return "";
+    }
+  }
+}
+
+// Factory to create appropriate news fetcher based on source
+class NewsFetcherFactory {
+  static createFetcher(source: string): NewsFetcher {
+    switch (source.toLowerCase()) {
+      case "guardian":
+        return new GuardianFetcher();
+      case "nyt":
+      case "nytimes":
+        return new NYTFetcher();
+      case "newsapi":
+        return new NewsApiFetcher();
+      default:
+        throw new Error(`Unsupported news source: ${source}`);
+    }
+  }
+}
+
+// Exported functions that use the factory pattern
+export async function fetchFromGuardian(
+  keyword: string,
+  categories: string[],
+  author: string,
+  date: string
+): Promise<NewsApiResult> {
+  const fetcher = NewsFetcherFactory.createFetcher("guardian");
+  return fetcher.fetch({ keyword, categories, author, date });
+}
+
+export async function fetchFromNYT(
+  keyword: string,
+  categories: string[],
+  author: string,
+  date: string
+): Promise<NewsApiResult> {
+  const fetcher = NewsFetcherFactory.createFetcher("nyt");
+  return fetcher.fetch({ keyword, categories, author, date });
+}
+
+export async function fetchFromNewsAPI(
+  keyword: string,
+  categories: string[],
+  date: string
+): Promise<NewsApiResult> {
+  const fetcher = NewsFetcherFactory.createFetcher("newsapi");
+  return fetcher.fetch({ keyword, categories, date });
+}

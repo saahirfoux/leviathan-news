@@ -10,7 +10,7 @@ interface NewsFeedProps {
   isLoading?: boolean;
 }
 
-export function NewsFeed({
+export default function NewsFeed({
   initialArticles = [],
   isLoading = false,
 }: NewsFeedProps) {
