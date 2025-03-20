@@ -13,3 +13,16 @@ export interface Article {
   category?: string;
   readTime?: number;
 }
+
+// Common article interface for our frontend
+export interface ArticleResponse {
+  id: string;
+  title: string;
+  summary: string;
+  date: string;
+  category: string;
+  author: string;
+  source: string;
+  image: string;
+  url: string;
+}

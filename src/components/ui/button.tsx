@@ -23,7 +23,7 @@ function Button({
     secondary: "bg-gray-800 hover:bg-gray-900 text-white",
     destructive: "bg-red-600 hover:bg-red-700 text-white",
     outline:
-      "bg-transparent border border-gray-300 hover:bg-gray-100 text-gray-800",
+      "bg-transparent border border-gray-300 hover:bg-gray-100 text-white-800 hover:text-gray-800",
   };
 
   const buttonClasses = `${baseStyles} ${variantStyles[variant]} ${className}`;
