@@ -1,0 +1,14 @@
+version: "3"
+services:
+  leviathan-news:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEWS_GUARDIAN_APIKEY=669f3eee-de8a-4aac-8000-1d1eb26d6235
+      - NEWS_NYT_APIKEY=fsMDP3Vdx8xv3EUdg4scBqWPmIA1kbxj
+      - NEWS_NYT_SECRET_KEY=eGsHvHij6aWQub1y
+      - NEWS_API_ORG_KEY=52a0d4be81434412a9cda9e8949f5244
