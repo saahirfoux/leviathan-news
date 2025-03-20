@@ -6,10 +6,10 @@ The fastest way to run Leviathan News is using the pre-built Docker image:
 
 ```bash
 # Pull the Docker image
-docker pull saahir87/leviathan-news
+docker pull saahir87/leviathan-news:latest
 
 # Run the container
-docker run -p 3000:3000 saahir87/leviathan-news
+docker run -p 3000:3000 saahir87/leviathan-news:latest
 ```
 
 Then access the application at http://localhost:3000
